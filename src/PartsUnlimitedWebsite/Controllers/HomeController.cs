@@ -67,18 +67,28 @@ namespace PartsUnlimited.Controllers
             // the products with the highest count
 
             // TODO [EF] We don't query related data as yet, so the OrderByDescending isn't doing anything
-            return _db.Products
+            List<Product> products = new List<Product>();
+            PartsUnlimitedContext.SqlRetryPolicy.Execute(() =>
+            {
+                products = _db.Products
                 .OrderByDescending(a => a.OrderDetails.Count())
                 .Take(count)
                 .ToList();
+            });
+            return products;
         }
 
         private List<Product> GetNewProducts(int count)
         {
-            return _db.Products
+            List<Product> products = new List<Product>();
+            PartsUnlimitedContext.SqlRetryPolicy.Execute(() =>
+            {
+                products = _db.Products
                 .OrderByDescending(a => a.Created)
                 .Take(count)
                 .ToList();
+            });
+            return products;
         }
 
         private List<CommunityPost> GetCommunityPosts()
@@ -116,13 +126,15 @@ namespace PartsUnlimited.Controllers
         public ActionResult Recommendations()
         {
             int count = 0;
-            while ( count < roco_count
-                   )
+            while (count < roco_count)
             {
-                _db.Products
+                PartsUnlimitedContext.SqlRetryPolicy.Execute(() =>
+                {
+                    _db.Products
                     .OrderByDescending(a => a.OrderDetails.Count())
                     .Take(count++)
                     .ToList();
+                });
             }
 
             return View();

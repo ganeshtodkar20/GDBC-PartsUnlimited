@@ -20,11 +20,16 @@ namespace PartsUnlimited.Search
         public async Task<IEnumerable<Product>> Search(string query)
         {
             var lowercase_query = query.ToLower();
-
-            var q = _context.Products
+            List<Product> products = new List<Product>();
+            await PartsUnlimitedContext.SqlRetryPolicy.Execute(async () =>
+            {
+                var q = _context.Products
                 .Where(p => p.Title.ToLower().Contains(lowercase_query));
 
-            return await q.ToAsyncEnumerable().ToList();
+            products = await q.ToAsyncEnumerable().ToList();
+            });
+
+            return products;
         }
     }
 }

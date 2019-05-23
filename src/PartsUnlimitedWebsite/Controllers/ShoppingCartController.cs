@@ -72,25 +72,28 @@ namespace PartsUnlimited.Controllers
         public async Task<IActionResult> AddToCart(int id)
         {
             // Retrieve the product from the database
-            var addedProduct = _db.Products
+            await PartsUnlimitedContext.SqlRetryPolicy.Execute(async () =>
+            {
+                var addedProduct = _db.Products
                 .Single(product => product.ProductId == id);
 
-            // Start timer for save process telemetry
-            var startTime = System.DateTime.Now;
+                // Start timer for save process telemetry
+                var startTime = System.DateTime.Now;
 
-            // Add it to the shopping cart
-            var cart = ShoppingCart.GetCart(_db, HttpContext);
+                // Add it to the shopping cart
+                var cart = ShoppingCart.GetCart(_db, HttpContext);
 
-            cart.AddToCart(addedProduct);
+                cart.AddToCart(addedProduct);
 
-            await _db.SaveChangesAsync(HttpContext.RequestAborted);
+                await _db.SaveChangesAsync(HttpContext.RequestAborted);
 
-            // Trace add process
-            var measurements = new Dictionary<string, double>()
-            {
-                {"ElapsedMilliseconds", System.DateTime.Now.Subtract(startTime).TotalMilliseconds }
-            };
-            _telemetry.TrackEvent("Cart/Server/Add", null, measurements);
+                // Trace add process
+                var measurements = new Dictionary<string, double>()
+                {
+                    {"ElapsedMilliseconds", System.DateTime.Now.Subtract(startTime).TotalMilliseconds }
+                };
+                _telemetry.TrackEvent("Cart/Server/Add", null, measurements);
+            });
 
             // Go back to the main store page for more shopping
             return RedirectToAction("Index");
@@ -105,42 +108,45 @@ namespace PartsUnlimited.Controllers
             // Retrieve the current user's shopping cart
             var cart = ShoppingCart.GetCart(_db, HttpContext);
 
-            // Get the name of the album to display confirmation
-            var cartItem = await _db.CartItems
+            return await PartsUnlimitedContext.SqlRetryPolicy.Execute(async () =>
+            {
+                // Get the name of the album to display confirmation
+                var cartItem = await _db.CartItems
                 .Where(item => item.CartItemId == request.Id)
                 .Include(c => c.Product)
                 .SingleOrDefaultAsync();
 
-            string message;
-            int itemCount;
-            if (cartItem != null)
-            {
-                // Remove from cart
-                itemCount = cart.RemoveFromCart(request.Id);
+                string message;
+                int itemCount;
+                if (cartItem != null)
+                {
+                    // Remove from cart
+                    itemCount = cart.RemoveFromCart(request.Id);
 
-                await _db.SaveChangesAsync(request.CancellationToken);
+                    await _db.SaveChangesAsync(request.CancellationToken);
 
-                string removed = (itemCount > 0) ? " 1 copy of " : string.Empty;
-                message = removed + cartItem.Product.Title + " has been removed from your shopping cart.";
-            }
-            else
-            {
-                itemCount = 0;
-                message = "Could not find this item, nothing has been removed from your shopping cart.";
-            }
+                    string removed = (itemCount > 0) ? " 1 copy of " : string.Empty;
+                    message = removed + cartItem.Product.Title + " has been removed from your shopping cart.";
+                }
+                else
+                {
+                    itemCount = 0;
+                    message = "Could not find this item, nothing has been removed from your shopping cart.";
+                }
 
-            // Display the confirmation message
+                // Display the confirmation message
 
-            var results = new ShoppingCartRemoveViewModel
-            {
-                Message = message,
-                CartTotal = cart.GetTotal().ToString(),
-                CartCount = cart.GetCount(),
-                ItemCount = itemCount,
-                DeleteId = request.Id
-            };
+                var results = new ShoppingCartRemoveViewModel
+                {
+                    Message = message,
+                    CartTotal = cart.GetTotal().ToString(),
+                    CartCount = cart.GetCount(),
+                    ItemCount = itemCount,
+                    DeleteId = request.Id
+                };
 
-            return Json(results);
+                return Json(results);
+            });
         }
     }
 }

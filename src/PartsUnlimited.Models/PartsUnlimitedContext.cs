@@ -6,6 +6,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Options;
 using System.Data.SqlClient;
+using Polly;
+using System;
 
 namespace PartsUnlimited.Models
 {
@@ -13,6 +15,13 @@ namespace PartsUnlimited.Models
     {
         private IOptionsSnapshot<ConfigSettings> _options;
         private string _dbConnectionString;
+        public static Policy SqlRetryPolicy = Policy
+                  .Handle<Exception>()
+                  .WaitAndRetry(new[]
+                  {
+                                TimeSpan.FromSeconds(5),
+                                TimeSpan.FromSeconds(10)
+                  });
 
         public PartsUnlimitedContext(IOptionsSnapshot<ConfigSettings> configSettings)
         {
@@ -56,10 +65,12 @@ namespace PartsUnlimited.Models
             
             if (!string.IsNullOrWhiteSpace(connectionString))
             {
-                var conn = new SqlConnection(connectionString);
-                conn.Open();
-                optionsBuilder.UseSqlServer(conn);
-                //optionsBuilder.UseSqlServer(_connectionString);
+                SqlRetryPolicy.Execute(() => {
+                    var conn = new SqlConnection(connectionString);
+                    conn.Open();
+                    optionsBuilder.UseSqlServer(conn);
+                    //optionsBuilder.UseSqlServer(_connectionString);
+                });
             }else
             {
                 System.Data.SqlClient.SqlConnectionStringBuilder builder = new System.Data.SqlClient.SqlConnectionStringBuilder(connectionString);
